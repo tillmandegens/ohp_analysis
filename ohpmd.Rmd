@@ -1,0 +1,217 @@
+---
+title: "Oregon Health Plan Empirical Project"
+author: "Tillman Degens, in Collaboration with Devin Bunch and Joey Schechter"
+date: "9/18/2020"
+header-includes:
+  - \usepackage{float}
+  - \floatplacement{figure}{H}
+output: 
+  pdf_document:
+    toc: true
+    toc_depth: 4
+    number_sections: true
+fig_caption: yes
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#Load in packages
+library(tidyverse)
+library(haven)
+library(kableExtra)
+library(stargazer)
+
+#read the data
+ohp_data = read_dta("ohp.dta")
+
+
+```
+## Abstract
+
+
+\pagebreak 
+## Question 1
+
+
+The difference between the  treatment and ohp_all_ever_survey is that treatment is individuals that were entered into medicaid specifically through the lottery, whereas ohp_all_ever_survey are those that have been enrolled in medicaid independent of the lottery. 
+
+```{r ohp_data, results='asis'}
+Gender = lm(gender_inp ~ treatment, data = ohp_data)
+Age = lm(age_inp ~ treatment, data = ohp_data)
+Not_White = lm(race_nwother_inp ~ treatment, data = ohp_data)
+Education = lm(edu_inp ~ treatment, data = ohp_data)
+Medicine= lm(rx_num_mod_inp ~ treatment, data = ohp_data)
+Cholesterol = lm(chl_inp ~ treatment, data = ohp_data)
+
+stargazer(Gender, Age, Not_White,Education, Cholesterol,
+          title = "Overall Regression Results for Explanatory Variables",
+          font.size = "tiny",
+          float.env = "sidewaystable")
+          
+
+          
+          #ci.level = 0.90,
+          #single.row = TRUE,
+          #header = FALSE)
+
+
+#```{r results='asis'}
+#stargazer(lm_baseline1,lm_baseline2,lm_baseline3, se = c(robust_se_baseline1,robust_se_baseline2,robust_se_baseline3),covariate.labels = c("Treat-Control Diff","Control Mean"))
+
+
+
+#Create summary statistics of 6 relevent characterisitcs  
+ohp_sum_1 <- ohp_data %>%
+    #group_by(treatment) %>%
+    summarise(
+      Gender = mean(gender_inp),
+      Age = mean(age_inp, na.rm = TRUE),
+      Not_White = mean(race_nwother_inp, na.rm = TRUE),
+      Education = mean(edu_inp, na.rm= TRUE),
+      Number_of_Medication = mean(rx_num_mod_inp, na.rm=TRUE),
+      Cholesterol = mean(chl_inp, na.rm = TRUE))
+
+#Create summary stastics df grouped by treatment and control
+ohp_sum_2 <- ohp_data %>%
+    group_by(treatment) %>%
+    summarise(
+      Gender = mean(gender_inp),
+      Age = mean(age_inp, na.rm = TRUE),
+      Not_White = mean(race_nwother_inp, na.rm = TRUE),
+      Education = mean(edu_inp, na.rm= TRUE),
+      Number_of_Medication = mean(rx_num_mod_inp, na.rm=TRUE),
+      Cholesterol = mean(chl_inp, na.rm = TRUE))
+
+kable(ohp_sum_1, format = "latex", booktabs = TRUE,
+        caption = "Mean of Relevant Characteristics",
+        format.args = list(big.mark= ",")) %>%
+    kable_styling(latex_options = c("HOLD_position","scale_down"))
+
+#Turn the summary table into a dataframe
+ohp_sum_df = as.data.frame(ohp_sum_2)
+
+#Pivot longer for better readability
+ohp_sum_df = ohp_sum_df %>% pivot_longer(!treatment)
+
+#Filter treatment and control to begin to reshape table
+treatment1 = ohp_sum_df %>% filter(treatment==1)
+treatment0 = ohp_sum_df %>% filter(treatment == 0 )
+
+#Join to get two rows
+working_table = treatment1 %>% left_join(treatment0, by = "name")
+
+#Select relevant rows
+working_table = working_table %>% select(name, value.x, value.y)
+
+
+#Create a variable for "difference in means"
+working_table = working_table %>% mutate(difference = value.x-value.y)
+# Rename variables 
+working_table = working_table %>% rename("Characteristic"= name,
+                                         "Control"= value.y, "Treatment" = value.x)
+
+
+#Filter out treatment and control for difference in standard error of means
+treatment_ohp = ohp_data%>% filter(treatment==1)
+control_ohp = ohp_data %>% filter(treatment == 0 )
+
+#Create standard error function
+std <- function(x) sd(x, na.rm = TRUE)/sqrt(length(x))
+
+#Check function and table returns the same results as if a regression was run
+lm(gender_inp ~ treatment, data = ohp_data)
+ 
+
+
+
+thisworks = list(c(0.009, 0.212, 0.006, 0.016, 0.613))
+
+#Turn into df
+thisworks = as.data.frame(thisworks)
+
+working_table = working_table%>% mutate(Standard_Error = thisworks)
+
+kable(working_table, format = "latex", booktabs = TRUE,
+        caption = "Difference in Means of Characterisitics for Treatment and Control",
+        format.args = list(big.mark= ",")) %>%
+    kable_styling(latex_options = c("HOLD_position","scale_down"))
+
+#regress ohp all ever survey on treatment
+lm(data= ohp_data, ohp_all_ever_survey ~ treatment)
+.254ish
+```
+
+## Question 5
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+ohp_data = ohp_data %>% 
+  mutate(Complience = case_when(treatment == 1 & ohp_all_ever_survey ==1~ 1,
+                                treatment == 0 & ohp_all_ever_survey ==0~ 1,
+                                treatment == 1 & ohp_all_ever_survey ==0 ~0,
+                                treatment == 0 & ohp_all_ever_survey ==1~ 0,
+                            ))
+mean(ohp_data$Complience)
+
+```
+The compliance rate for this experiment was 61.72%
+
+## Question 6
+```{r}
+ohp_sum_1 <- ohp_data %>%
+    #group_by(treatment) %>%
+    summarise(
+      Diabetes = mean(dia_dx_post_lottery, na.rm = TRUE),
+      Doctors = mean(doc_num_mod_inp, na.rm = TRUE),
+      Hypertension = mean(hbp_dx_post_lottery, na.rm = TRUE),
+      Education = mean(edu_inp, na.rm= TRUE),
+      Number_of_Medication = mean(rx_num_mod_inp, na.rm=TRUE),
+      Cholesterol = mean(chl_inp, na.rm = TRUE))
+library(stargazer)
+
+
+dia <- lm(data=ohp_data, treatment~dia_dx_post_lottery)
+
+dia
+
+doc <- lm(data = ohp_data, treatment~doc_num_mod_inp)
+
+doc
+
+hdp <- lm(data=ohp_data, treatment~hbp_dx_post_lottery)
+
+hdp
+
+meds <- lm(data=ohp_data,treatment~rx_num_mod_inp)
+meds
+
+#reg_edu_itt <- lm(data=ohp_data,treatment~edu_inp)
+#reg_edu_itt
+
+chl <- lm(data=ohp_data,treatment~chl_inp)
+chl
+
+
+stargazer(dia, doc, hdp,meds, chl,  robust = TRUE,
+          title = "Overall Regression Results for Outcome Variables",
+          type = "latex",
+          column.labels = c("Matched Comparison Group","Stratified Future Participants"),
+          ci = TRUE,
+          ci.level = 0.90,
+          single.row = TRUE,
+          header = FALSE)
+#stargazer(dia, doc, hdp,meds, chl,  robust = TRUE)
+
+```
+
+The ITT is the coefficient is the difference in mean of the variable between the control and the treatment. The intercept is the mean of the control, and the treatment coefficient is the ITT estimate. you get one ITT estimate per variable of interest regressed on treatment.
+
+## Question 7
+
+For this question, we are taking the beta coefficients from question 6, and then dividing each of them by the compliance rate found in question 5. This yields the average treatment effect on the treated. The intend to treat effect divided by the compliance rate.
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
